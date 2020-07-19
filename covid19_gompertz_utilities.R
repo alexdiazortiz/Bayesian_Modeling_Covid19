@@ -7,9 +7,9 @@ library("COVID19")
 library("dplyr")
 library("rjags")
 library("MLmetrics")
+library("doRNG")
 library("foreach")
 library("doFuture")
-library("doRNG")
 
 
 #
