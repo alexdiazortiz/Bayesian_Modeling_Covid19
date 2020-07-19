@@ -374,10 +374,7 @@ output_mcmc_confirmed_cases <- foreach (i = 1:length(by_country)) %dopar%
 
 # Create table of summaries 
 confirmed_cases_summary <- create_dummy_summary_df() %>% rename(Max_Confirmed_Cases = FATorConfCases)
-```
 
-
-```{r}
 # Summary countries loop
 for (i in 1:length(by_country)){
   
