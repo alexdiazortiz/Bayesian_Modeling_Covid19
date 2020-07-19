@@ -1,4 +1,4 @@
-# Bayesian_Modeling_Covid19
+# Bayesian Modeling of Covid19 Spread
 A Bayesian approach of the modeling COVID19 spread based on the Gompertz equation. It uses
 * the R Interface to COVID-19 Data Hub  of Guidotti and Ardia to retrive current COVID19 data worldwide. 
 
