@@ -1,0 +1,410 @@
+---
+title: "Bayesian modeling of COVID19: Single Gompertz equation"
+output: html_notebook
+---
+# * Version 0.2
+# History
+* Date: 2020.06.20 
+* : Now Dynamical database from package covid19  (see https://covid19datahub.io)
+* : package dplyr 
+
+* Date 2020.06.28 
+*  : functions for the MCMC
+ 
+* Date 2020.06.29
+* : Functions for plotting (R base) 
+* : Sources file called helpers.R where the functions are.
+
+* Date 2020.07.01
+* : a loop to inform the priors by providing a MLE
+
+* Date 2020.07.15
+* Updated : Function rum_mcmc_simulation. Now uses only the country_index.
+*  : For-loop on countries replaced by foreach %dopar%
+
+# Helper functions
+```{r}
+source("./covid19_gompertz_utilities.R")
+```
+
+```{r}
+# doFuture for countries
+registerDoFuture()
+plan(multisession)
+```
+
+# Data cutoffs, directories, and other parameters : For more info, see `covid19_gompertz_utilities.R`
+```{r}
+confirmed_cases_cutoff         <- 1000              # Filters out countries with less confirmed cases than
+fatalities_cutoff              <- 25                # Filters out countries with less fatalities than
+density_confirmed_cases_cutoff <- 0.001             # Filters out countries with less density of confirmed cases than
+population_cutoff              <- 1e6               # Filters out countries with less population than
+
+# Directories and file names
+results_dir      <- "/Users/ado/Desktop/COVID19_PROJECT/Results/Devs/"   
+csv_file_fat_ind <- paste0(results_dir, "Summaries/", "fatalities_", date_cutoff,".csv")
+csv_file_cc_ind  <- paste0(results_dir, "Summaries/", "confirmed_cases_", date_cutoff,".csv")
+
+# MCMC variables
+niter_sim_max  <- 1e4      # Exits with (geq). Recommended: 1e7
+
+# Plotting 
+plot_flag      <- 0        # 0 : no output on disk but on terminal. 
+                           #     This flag also rules the writing of summaries.
+```
+
+# Data 
+Data is loaded with one week (7 days) lag.
+```{r}
+full_data <- covid19(verbose = FALSE, level = 1, end = date_last)
+```
+
+Select columns of interest, rename them, and calculate the number of days elapsed from day_zero = Date[1]
+```{r}
+dat <-full_data %>% 
+  select(id, Country = administrative_area_level_1, Date = date, Confirmed_Cases = confirmed, Fatalities = deaths, Population = population) %>% 
+  group_by(Country) %>%
+  mutate(Density_Confirmed_Cases = max(Confirmed_Cases) / Population, Time = Date - Date[1]) %>% 
+  ungroup() 
+
+day_zero <- dat$Date[1]
+```
+
+# Working dataframe
+## Selecting countries using data cutoffs
+Non-zero cut-offs for the number of `fatalities`, the `Confirmed_Cases` and the `density of confirmed cases`, and/or the `population` are important to define, because they allow for filtering of countries where the covid19 has not yet achieved the level of an epidemic. That is, countries that are in the initial stages of the disease or where it has been controlled at the early stage.  
+
+For such countries there are no well defined trends, i.e., not enough information, to fit a Gompertz model for the evolution of confirmed cases and/or fatalities.
+Filter out the countries by chosen cutoff and make sure the list of countries is current:
+
+Select countries by a cutoff criterion (in this case "Pop+Dens"):
+```{r}
+(by_country<-include_countries(dat, "Pop+Dens"))
+length(by_country)
+```
+
+## Selecting countries by name
+Alternatively, a list of (at least two) countries can be provided by name, i.e., `by_country = c("Country1", "Country2", ...)`
+```{r}
+by_country <- c("France","Germany", "Romania", "Dominican Republic")
+```
+
+Re-filter the countries in `dat_by_country` to keep only the countries above the chosen cutoff:
+```{r}
+dat_by_country <- dat %>% 
+  filter(Country %in% by_country) %>% 
+  group_by(Country)  %>% 
+  mutate(Daily_Confirmed_Cases = Confirmed_Cases - lag(Confirmed_Cases), Daily_Fatalities = Fatalities - lag(Fatalities)) %>%
+  ungroup()
+```
+
+The number of days in each country under study is:
+```{r}
+nrow(dat_by_country)/ length(by_country)
+```
+
+Thus a variable `date_cutoff` is defined (see above in Section "Data cutoffs") as to separate the traning from the validation sets:
+```{r}
+train_by_country <- dat_by_country %>% filter(Date <= date_cutoff)
+test_by_country  <- dat_by_country %>% filter(Date >  date_cutoff)
+```
+
+## Excluded countries
+Number of countries off the list due to the `density_confirmed_cases_cutoff` and `population_cutoff` cutoffs:
+```{r}
+# Type = "Fatalities", "Confirmed_Cases", "Pop+Dens"
+list_excluded_countries <- exclude_countries(dat,"Pop+Dens")
+```
+
+Create a dataframe with the excluded countries:
+```{r}
+dat_excluded_countries <- dat %>% 
+  filter(Country %in% list_excluded_countries ) %>% 
+  arrange(desc(Fatalities))
+
+```
+
+Arrange by the excluded countries by the maximum of confirmed cases:
+```{r}
+dat_excluded_countries %>% 
+  filter(Date == date_last) %>% 
+  group_by(Country) %>%
+  arrange(desc(Confirmed_Cases))
+```
+
+Arrange by the excluded countries by the maximum of the density of confirmed cases:
+```{r}
+dat_excluded_countries %>% 
+  filter(Date == date_last) %>% 
+  group_by(Country) %>%
+  arrange(desc(Density_Confirmed_Cases))
+```
+
+
+# Modeling
+## Non-linear fit independent model per country
+### Fatalities as function of time
+```{r}
+# Flat but sensible priors
+mean_logasymptote_fatalities <- 1e1
+mean_location_fatalities     <- 1e2
+mean_growth_rate_fatalities  <- 0.01
+
+prec_logasymptote_fatalities <- 1e-4	
+prec_location_fatalities     <- 1e-4
+prec_growth_rate_fatalities  <- 1e-4	
+
+# Loop for the priors
+for (index_prior_loop in 1:2){
+  
+# Fatalities model string
+gompertz_fatalities_string <- build_model_string("Fatalities", 
+                                                 mean_logasymptote_fatalities, 
+                                                 mean_location_fatalities, 
+                                                 mean_growth_rate_fatalities, 
+                                                 prec_logasymptote_fatalities, 
+                                                 prec_location_fatalities, 
+                                                 prec_growth_rate_fatalities
+                                                 )
+
+# Parameters to trace
+gompertz_fatalities_params <- c("logasymptote","location","growth_rate","prec")
+
+# Begin MCMC simulation 
+# Uses lowered values for the number_steps_* variables
+registerDoRNG(1970)
+fatalities_output_list <- foreach (i = 1:length(by_country)) %dopar% 
+run_mcmc_simulation( index_country         = i , 
+                     model_string          = gompertz_fatalities_string , 
+                     model_parameters      = gompertz_fatalities_params,
+                     number_steps_update   = 1e3, 
+                     number_steps_run_init = 1e3, 
+                     number_steps_run_max  = 1e3
+                     )
+
+# Create table of summaries 
+fatalities_summary <- create_dummy_summary_df() %>% rename(Max_Fatalities = FATorConfCases)
+
+# Summary countries loop
+for (i in 1:length(by_country)){
+  
+# Fill-in the summary dataframe by row = country
+gompertz_fatalities_csim <- fatalities_output_list[[i]][[2]]
+final_niter_fatalities   <- fatalities_output_list[[i]][[3]]
+
+fatalities_summary[i, ] <- summary_by_country("Fatalities", 
+                                              gompertz_fatalities_csim, 
+                                              by_country[i], 
+                                              date_pred, 
+                                              train_by_country, 
+                                              test_by_country, 
+                                              final_niter_fatalities)
+} # End summary countries  loop
+
+# Update the priors
+fatalities_means <- fatalities_summary %>% 
+  select(Growth_Rate, Location, Log_Asymptote, Precision)  %>%
+  summarize(mean(Log_Asymptote), mean(Location), mean(Growth_Rate), mean(Precision))
+
+fatalities_prec <- fatalities_summary %>% 
+  select(Growth_Rate, Location, Log_Asymptote, Precision)  %>%
+  summarize(1/var(Log_Asymptote), 1/var(Location),1/var(Growth_Rate), var(Precision))
+
+mean_logasymptote_fatalities <- fatalities_means[[1]]
+mean_location_fatalities     <- fatalities_means[[2]]
+mean_growth_rate_fatalities  <- fatalities_means[[3]]
+
+prec_logasymptote_fatalities <- fatalities_prec[[1]]	
+prec_location_fatalities     <- fatalities_prec[[2]]
+prec_growth_rate_fatalities  <- fatalities_prec[[3]]
+
+ } # end loop priors
+
+# Fatalities model string using the pre-converged priors
+gompertz_fatalities_string <- build_model_string("Fatalities", 
+                                                 mean_logasymptote_fatalities, 
+                                                 mean_location_fatalities, 
+                                                 mean_growth_rate_fatalities, 
+                                                 prec_logasymptote_fatalities, 
+                                                 prec_location_fatalities, 
+                                                 prec_growth_rate_fatalities)
+
+# Parameters to trace
+gompertz_fatalities_params <- c("logasymptote","location","growth_rate","prec")
+  
+# Begin MCMC simulation 
+# Notice that the number_steps_* variables are now the ones defined for the actual calculation (see preamble)
+registerDoRNG(1970)
+output_mcmc_fatalities <- foreach (i = 1:length(by_country)) %dopar% 
+  run_mcmc_simulation( index_country    = i ,
+                       model_string     = gompertz_fatalities_string , 
+                       model_parameters = gompertz_fatalities_params 
+                       )
+
+# Create table of summaries 
+fatalities_summary <- create_dummy_summary_df() %>% rename(Max_Fatalities = FATorConfCases)
+
+# Summary countries loop
+for (i in 1:length(by_country)){
+  
+# Fill the summary dataframe by row = country
+gompertz_fatalities_csim  <- output_mcmc_fatalities[[i]][[2]]
+final_niter_fatalities    <- output_mcmc_fatalities[[i]][[3]]
+
+fatalities_summary[i, ] <- summary_by_country("Fatalities", 
+                                              gompertz_fatalities_csim, 
+                                              by_country[i], 
+                                              date_pred, 
+                                              train_by_country, 
+                                              test_by_country, 
+                                              final_niter_fatalities)
+# Plot
+plot_gompertz("Fatalities", train_by_country, Fatalities~Time, gompertz_fatalities_csim, projected_days, plot_flag = plot_flag)
+plot_gompertz_daily_cases("Fatalities", train_by_country, Daily_Fatalities~Time, gompertz_fatalities_csim, projected_days, plot_flag = plot_flag)
+
+} # End loop
+
+
+# Save the results from tables / data frames
+if (plot_flag == 1){
+write.csv(fatalities_summary, csv_file_fat_ind)
+}
+
+# A summary of the Gompertz parameters for the independent models
+# fatalities_summary
+```
+
+### The number of Confirmed Cases as function of time
+```{r}
+# Flat but sensible priors
+mean_logasymptote_confirmed_cases <- 1e1
+mean_location_confirmed_cases     <- 1e2
+mean_growth_rate_confirmed_cases  <- 0.01
+
+prec_logasymptote_confirmed_cases <- 1e-4	
+prec_location_confirmed_cases     <- 1e-4
+prec_growth_rate_confirmed_cases  <- 1e-4	
+
+# Loop for the priors
+for (index_prior_loop in 1:2){
+  
+# Confirmed_Cases model string
+gompertz_confirmed_cases_string <- build_model_string("Confirmed_Cases", 
+                                                 mean_logasymptote_confirmed_cases , 
+                                                 mean_location_confirmed_cases , 
+                                                 mean_growth_rate_confirmed_cases , 
+                                                 prec_logasymptote_confirmed_cases , 
+                                                 prec_location_confirmed_cases , 
+                                                 prec_growth_rate_confirmed_cases )
+
+# Parameters to trace
+gompertz_confirmed_cases_params <- c("logasymptote","location","growth_rate","prec")
+  
+# Begin MCMC simulation 
+# Uses lowered values for the number_steps_* variables
+registerDoRNG(1970)
+confirmed_cases_output_list<- foreach (i = 1:length(by_country)) %dopar% 
+  run_mcmc_simulation( index_country         = i , 
+                       model_string          = gompertz_confirmed_cases_string , 
+                       model_parameters      = gompertz_confirmed_cases_params,
+                       number_steps_update   = 1e3, 
+                       number_steps_run_init = 1e3, 
+                       number_steps_run_max  = 1e3
+                       )
+
+# Create table of summaries 
+confirmed_cases_summary <- create_dummy_summary_df() %>% rename(Max_Confirmed_Cases = FATorConfCases)
+
+# Summary countries loop
+for (i in 1:length(by_country)){
+    
+# Fill-in the summary dataframe by row = country
+gompertz_confirmed_cases_csim <- confirmed_cases_output_list[[i]][[2]]
+final_niter_confirmed_cases   <- confirmed_cases_output_list[[i]][[3]]
+    
+confirmed_cases_summary[i, ] <- summary_by_country("Confirmed_Cases", 
+                                                   gompertz_confirmed_cases_csim, 
+                                                   by_country[i], 
+                                                   date_pred, 
+                                                   train_by_country, 
+                                                   test_by_country, 
+                                                   final_niter_confirmed_cases)
+                                              
+} # End summary countries loop
+
+# Update the priors
+confirmed_cases_means <- confirmed_cases_summary %>% 
+  select(Growth_Rate, Location, Log_Asymptote, Precision)  %>%
+  summarize(mean(Log_Asymptote), mean(Location), mean(Growth_Rate), mean(Precision))
+
+confirmed_cases_prec <- confirmed_cases_summary %>% 
+  select(Growth_Rate, Location, Log_Asymptote, Precision)  %>%
+  summarize(1/var(Log_Asymptote), 1/var(Location),1/var(Growth_Rate), var(Precision))
+
+mean_logasymptote_confirmed_cases <- confirmed_cases_means[[1]]
+mean_location_confirmed_cases     <- confirmed_cases_means[[2]]
+mean_growth_rate_confirmed_cases  <- confirmed_cases_means[[3]]
+
+prec_logasymptote_confirmed_cases <- confirmed_cases_prec[[1]]	
+prec_location_confirmed_cases     <- confirmed_cases_prec[[2]]
+prec_growth_rate_confirmed_cases  <- confirmed_cases_prec[[3]]
+
+} # end loop priors
+
+# Confirmed_Cases model string using the pre-converged priors
+gompertz_confirmed_cases_string <- build_model_string("Confirmed_Cases", 
+                                                 mean_logasymptote_confirmed_cases , 
+                                                 mean_location_confirmed_cases , 
+                                                 mean_growth_rate_confirmed_cases , 
+                                                 prec_logasymptote_confirmed_cases , 
+                                                 prec_location_confirmed_cases , 
+                                                 prec_growth_rate_confirmed_cases )
+
+# Parameters to trace
+gompertz_confirmed_cases_params <- c("logasymptote", "location", "growth_rate", "prec")
+
+# Begin MCMC simulation 
+# Notice that the number_steps_* variables are now the ones defined for the actual calculation (see preamble)
+registerDoRNG(1970)
+output_mcmc_confirmed_cases <- foreach (i = 1:length(by_country)) %dopar% 
+  run_mcmc_simulation( index_country    = i , 
+                       model_string     = gompertz_confirmed_cases_string , 
+                       model_parameters = gompertz_confirmed_cases_params 
+                       )
+
+# Create table of summaries 
+confirmed_cases_summary <- create_dummy_summary_df() %>% rename(Max_Confirmed_Cases = FATorConfCases)
+```
+
+
+```{r}
+# Summary countries loop
+for (i in 1:length(by_country)){
+  
+# Fill the summary dataframe by row = country
+gompertz_confirmed_cases_csim <- output_mcmc_confirmed_cases[[i]][[2]]
+final_niter_confirmed_cases   <- output_mcmc_confirmed_cases[[i]][[3]]
+
+confirmed_cases_summary[i, ] <- summary_by_country("Confirmed_Cases", 
+                                                   gompertz_confirmed_cases_csim, 
+                                                   by_country[i], 
+                                                   date_pred, 
+                                                   train_by_country, 
+                                                   test_by_country, 
+                                                   final_niter_confirmed_cases)
+
+# Plot
+plot_gompertz("Confirmed_Cases", train_by_country, Confirmed_Cases~Time, gompertz_confirmed_cases_csim, projected_days, plot_flag = plot_flag)
+plot_gompertz_daily_cases("Confirmed_Cases", train_by_country, Daily_Confirmed_Cases~Time, gompertz_confirmed_cases_csim, projected_days, plot_flag = plot_flag)
+
+} # End countries loop
+
+## Save the results from tables / data frames
+if (plot_flag == 1){
+write.csv(confirmed_cases_summary, csv_file_cc_ind)
+}
+
+# A summary of the Gompertz parameters for the independent models
+# confirmed_cases_summary
+```
+
