@@ -3,13 +3,18 @@
 #
 remotes::install_github("covid19datahub/R")
 
-library("COVID19")
-library("dplyr")
-library("rjags")
-library("MLmetrics")
-library("doRNG")
-library("foreach")
-library("doFuture")
+library(globals)
+library(COVID19)
+library(dplyr)
+library(rjags)
+library(MLmetrics)
+library(future)
+library(iterators)
+library(parallel)
+library(rngtools)
+library(doRNG)
+library(foreach)
+library(doFuture)
 
 
 #

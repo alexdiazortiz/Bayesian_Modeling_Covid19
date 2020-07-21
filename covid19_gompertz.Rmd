@@ -29,8 +29,8 @@ source("./covid19_gompertz_utilities.R")
 
 ```{r}
 # doFuture for countries
-registerDoFuture()
-plan(multisession)
+doFuture::registerDoFuture()
+future::plan(multisession)
 ```
 
 # Data cutoffs, directories, and other parameters : For more info, see `covid19_gompertz_utilities.R`
