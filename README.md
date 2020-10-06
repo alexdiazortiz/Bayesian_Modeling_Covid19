@@ -23,4 +23,4 @@ It performs:
 * A nonlinear parametric fit of the COVID19 spread (i.e., fatalities, confirmed cases, recovered) by country.
 
 It provides:
-* Spreading (atalities, confirmed cases, recovered and active cases) plots both cdaily and cumulative.
+* Both daily and cumulative spreading (fatalities, confirmed cases, recovered and active cases) plots. 
