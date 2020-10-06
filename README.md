@@ -1,5 +1,5 @@
 # Bayesian Modeling of Covid19 Spread
-A Bayesian approach of the modeling COVID19 spread based on the Gompertz equation. 
+A Bayesian approach of the modeling COVID19 one and two-wave spread based on the Gompertz equation via Markov Chain Monte Carlo (MCMC) simulations.
 
 It needs:
 * JAGS (https://sourceforge.net/projects/mcmc-jags/)
@@ -14,16 +14,13 @@ It uses:
 * RJAGS package of Martyn Plummer to perform MCMC to obtain posterior estimates 
    - See : https://cran.r-project.org/web/packages/rjags/index.html
    
-* Additional R packages
-   - dplyr
-   - MLmetrics
+* Packages for parallel computations (see full list in the "utilities" file:
    - foreach
    - doFuture
    - doRNG
      
 It performs:
-* A nonlinear parametric fit of the COVID19 spread (i.e., fatalities and confirmed cases) by country.
+* A nonlinear parametric fit of the COVID19 spread (i.e., fatalities, confirmed cases, recovered) by country.
 
 It provides:
-* A dataframe summarizing the model parameters by country for further analysis.
-* Spread (fatalities and confirmed cases) plots.
+* Spreading (atalities, confirmed cases, recovered and active cases) plots both cdaily and cumulative.
