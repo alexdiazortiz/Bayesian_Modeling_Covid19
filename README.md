@@ -1,4 +1,4 @@
-# Bayesian Modeling of Covid19 Spread
+# Bayesian Modeling of Covid-19 Spread
 A Bayesian approach of the modeling COVID19 one and two-wave spread based on the Gompertz equation via Markov Chain Monte Carlo (MCMC) simulations.
 
 It needs:
