@@ -1,4 +1,4 @@
-# Bayesian Modeling of Covid19 Spread
+# Bayesian Modeling of Covid-19 Spread
 A Bayesian approach of the modeling COVID19 one and two-wave spread based on the Gompertz equation via Markov Chain Monte Carlo (MCMC) simulations.
 
 It needs:
@@ -14,7 +14,7 @@ It uses:
 * RJAGS package of Martyn Plummer to perform MCMC to obtain posterior estimates 
    - See : https://cran.r-project.org/web/packages/rjags/index.html
    
-* Packages for parallel computations (see full list in the "utilities" file:
+* Packages for parallel computations (see full list in the "utilities" file):
    - foreach
    - doFuture
    - doRNG
