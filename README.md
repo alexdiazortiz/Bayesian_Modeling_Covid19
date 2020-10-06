@@ -14,7 +14,7 @@ It uses:
 * RJAGS package of Martyn Plummer to perform MCMC to obtain posterior estimates 
    - See : https://cran.r-project.org/web/packages/rjags/index.html
    
-* Packages for parallel computations (see full list in the "utilities" file:
+* Packages for parallel computations (see full list in the "utilities" file):
    - foreach
    - doFuture
    - doRNG
