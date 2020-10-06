@@ -3,7 +3,7 @@ title: "Bayesian modeling of COVID19: Double Gompertz equation"
 output: html_notebook
 ---
 # * Version 1.0
-Uses data from package covid19  (see https://covid19datahub.io) to fit single and double Gompertz equations to model one- and two-wave  COVOD19 spread, respectively, by means of a Bayesian MCMC approach.
+Uses data from package covid19  (see https://covid19datahub.io) to fit single and double Gompertz equations to model one- and two-wave  COVID1-9 spreading, respectively, by means of a Bayesian MCMC approach.
 
 # Preliminaries
 ```{r}
