@@ -1,0 +1,215 @@
+---
+title: "Bayesian modeling of COVID19: Double Gompertz equation"
+output: html_notebook
+---
+# * Version 1.0
+Uses data from package covid19  (see https://covid19datahub.io) to fit single and double Gompertz equations to model one- and two-wave  COVID1-9 spreading, respectively, by means of a Bayesian MCMC approach.
+
+# Preliminaries
+```{r}
+# Helper functions and data
+source("./covid19_gompertz_utilities.R")
+source("./covid19_gompertz_parameters.R")
+# Path to save results
+results_path <- file.path("" , "dir1" , "dir2" , "dir3" )
+```
+
+# Data from covid19datahub
+* `full_data`             : Loaded with one week (7 days) lag. 
+* `sf_dat`                : `full_data`-selected and fortified.
+* `latest_global_figures` : Latest figures worldwide from `sf_dat`.
+* `dat`                   : Working database `sf_dat`-country-filtered by Pop+Dens cutoffs (see below)
+
+Database `dat` has been filtered by following thresholds
+```{r}
+print(paste("Confirmed cases >"           , confirmed_cases_cutoff))
+print(paste("Density of confirmed cases >", density_confirmed_cases_cutoff))
+print(paste("Country's population >"      , population_cutoff))
+```
+
+A list of the countries included in the working database `dat` can be obtained using `include_countries(sf_dat, "Pop+Dens")` and for those excluded `exclude_countries(sf_dat, "Pop+Dens")`
+
+Latest (per `date_last`) top-10/bottom-10 country-ranking is possible for the following (13) variables
+```{r}
+latest_figures <- get_latest_figures(dat) 
+names(latest_figures)[-c(1:3,17)]
+```
+
+For instance, `Fatalities`, `Density_Fatalities`, and `Daily_Fatalities`
+```{r}
+top_10_ranking(df = latest_figures, type = "Fatalities")
+top_10_ranking(df = latest_figures, type = "Daily_Fatalities")
+top_10_ranking(df = latest_figures, type = "Density_Fatalities")
+```
+
+Countries sorted by wave of `Confirmed_Cases`, `Fatalities`, and `Recovered` :
+```{r}
+list_of_countries <- include_countries(dat, "Pop+Dens")
+countries_by_wave <- rank_countries_by_wave(list_of_countries, dat)
+```
+
+# MCMC simulation
+MCMC estimation of a Gompertz function for each of the `type` in `by_cases` and countries in `by_country`
+```{r}
+# Needed to execute the MCMC and visualization
+fit_range    <- 0:projected_days
+
+# List of countries of interest
+by_country <- c("Canada", "Germany")
+
+# Initialize list of types/cases 
+by_cases              <- c("Confirmed_Cases", "Fatalities", "Recovered")
+case_list_output_mcmc <- vector(mode = "list", length = length(by_cases))
+
+for (by_type in by_cases){
+  
+  # Initialize 
+  country_list_output_mcmc <- vector(mode = "list", length = length(by_country))
+
+  # Flat but sensible priors
+  mean_logasymptote_1 <- 1e1
+  mean_location_1     <- 1e2
+  mean_growth_rate_1  <- 0.01
+  prec_logasymptote_1 <- 1e-4  
+  prec_location_1     <- 1e-4
+  prec_growth_rate_1  <- 1e-4
+
+  mean_logasymptote_2 <- 1e1
+  mean_location_2     <- 1e2
+  mean_growth_rate_2  <- 0.01
+  prec_logasymptote_2 <- 1e-4  
+  prec_location_2     <- 1e-4
+  prec_growth_rate_2  <- 1e-4
+
+
+  registerDoRNG(1970)
+  country_list_output_mcmc <- foreach (i = 1:length(by_country)) %dopar% {
+  
+    by_wave <- get_wave( df      = countries_by_wave , 
+                         country = by_country[i]     , 
+                         type    = by_type           , 
+                         fswave   = 1
+                         ) 
+
+  
+    list_gompertz_string <- list( type                = by_type             , 
+                                      
+                                  mean_logasymptote_1 = mean_logasymptote_1 ,
+                                  mean_location_1     = mean_location_1     , 
+                                  mean_growth_rate_1  = mean_growth_rate_1  , 
+                              
+                                  prec_logasymptote_1 = prec_logasymptote_1 , 
+                                  prec_location_1     = prec_location_1     , 
+                                  prec_growth_rate_1  = prec_growth_rate_1  ,
+                                     
+                                  mean_logasymptote_2 = mean_logasymptote_2 ,
+                                  mean_location_2     = mean_location_2     , 
+                                  mean_growth_rate_2  = mean_growth_rate_2  , 
+                              
+                                  prec_logasymptote_2 = prec_logasymptote_2 , 
+                                  prec_location_2     = prec_location_2     , 
+                                  prec_growth_rate_2  = prec_growth_rate_2  ,
+                                      
+                                  wave                = by_wave
+                                  )
+  
+  
+    run_mcmc_simulation_2( index_country         = i                    , 
+                           list_model_string     = list_gompertz_string , 
+                           number_chains         = 1                    ,
+                           number_steps_update   = 1e4                  , 
+                           number_steps_run_init = 2e4                  , 
+                           number_steps_run_max  = 1e7 
+                           )
+  }
+
+  names(country_list_output_mcmc)                   <- by_country
+  case_list_output_mcmc[[match(by_type, by_cases)]] <- country_list_output_mcmc
+}
+
+names(case_list_output_mcmc) <- by_cases
+remove(country_list_output_mcmc)
+gc()
+```
+
+Active cases can by estimated as a by-product of the previous results.
+```{r}
+gfit_active_cases <- vector(mode = "list", length = length(by_country))
+
+gfit_active_cases <- foreach (i = 1:length(by_country)) %dopar% { 
+  gfit <- gompertz_eval( case_list_output_mcmc[["Confirmed_Cases"]][[by_country[i]]][["csim"]] , 
+                 fit_range                                                             ,
+                 case_list_output_mcmc[["Confirmed_Cases"]][[by_country[i]]][["wave"]]
+                 ) -
+  gompertz_eval( case_list_output_mcmc[["Fatalities"]][[by_country[i]]][["csim"]] ,
+                 fit_range                                                        ,
+                 case_list_output_mcmc[["Fatalities"]][[by_country[i]]][["wave"]] 
+                 ) -
+  gompertz_eval( case_list_output_mcmc[["Recovered"]][[by_country[i]]][["csim"]] ,
+                 fit_range                                                       ,
+                 case_list_output_mcmc[["Recovered"]][[by_country[i]]][["wave"]] 
+                 ) 
+  return_list <- list(csim = gfit, wave = 1) 
+  }
+
+names(gfit_active_cases)     <- by_country
+case_list_output_mcmc[[4]]   <- gfit_active_cases
+by_cases                     <- c(by_cases, "Active_Cases")
+names(case_list_output_mcmc) <- c(by_cases)
+
+remove(gfit_active_cases)
+```
+
+# Visualization and postprocessing
+```{r}
+# Initialize 
+case_list_output_vis <- vector(mode = "list", length = length(by_cases))
+
+for (by_type in by_cases){
+  country_list_output_vis  <- vector(mode = "list", length = length(by_country))
+
+  country_list_output_vis <- foreach (i = 1:length(by_country)) %dopar% {
+
+    visualize_cases_mcmc( country_index    = i                      ,  
+                          type             = by_type                , 
+                          df               = dat                    , 
+                          x                = fit_range              ,
+                          list_output_mcmc = case_list_output_mcmc[[by_type]][[by_country[i]]] , 
+                          wave             = case_list_output_mcmc[[by_type]][[by_country[i]]] 
+                          )
+  }
+  
+  names(country_list_output_vis) <- by_country
+  case_list_output_vis[[match(by_type, by_cases)]] <- country_list_output_vis
+}
+
+names(case_list_output_vis) <- by_cases
+remove(country_list_output_vis)
+gc()
+```
+
+Visualizing the results by calling directly each element of the list `case_list_output_vis`:
+```{r}
+case_list_output_vis[["Active_Cases"]][[by_country[1]]][["Case"]]
+case_list_output_vis[["Active_Cases"]][[by_country[1]]][["Daily_Case"]]
+```
+
+By country:
+```{r}
+invisible( lapply( by_cases, function(type) print(case_list_output_vis[[type]][[by_country[1]]][["Case"]])       ))
+invisible( lapply( by_cases, function(type) print(case_list_output_vis[[type]][[by_country[1]]][["Daily_Case"]]) ))
+```
+
+All of them via the function `screen_plots()`
+```{r}
+screen_plots(case_list_output_vis)
+```
+
+Saving the results to disk :
+```{r}
+store_plots( case_list_output_vis,
+             save_path = results_path,
+             res       = 180
+             )
+```
+
