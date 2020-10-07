@@ -118,8 +118,8 @@ for (by_type in by_cases){
                            list_model_string     = list_gompertz_string , 
                            number_chains         = 1                    ,
                            number_steps_update   = 1e4                  , 
-                           number_steps_run_init = 2e4                  , 
-                           number_steps_run_max  = 1e7 
+                           number_steps_run_init = 2e3                  , 
+                           number_steps_run_max  = 1e6 
                            )
   }
 
