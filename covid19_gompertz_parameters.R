@@ -41,7 +41,7 @@ niter_update   <- 1e4      # Recommended 1e3-1e4
 niter_sim_init <- 5e3      # Number of MCMC steps for the first iteration
 niter_sim_max  <- 1e7      # Exits with (geq). Recommended: 1e7
 thinning_init  <- 1        # 100
-epsilon_0      <- 2        # Maximum change in the position of the inflection point. Exits with (leq)
+epsilon_0      <- 0.5      # Maximum change in the position of the inflection point. Exits with (leq)
 
 
 

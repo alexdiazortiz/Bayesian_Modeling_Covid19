@@ -18,6 +18,7 @@ library(quantmod)
 library(ggplot2)
 library(ggthemes)
 library(extrafont)
+library(scales)
 
 library(future)
 library(iterators)
@@ -27,13 +28,13 @@ library(doRNG)
 library(foreach)
 library(doFuture)
 
-library(MLmetrics)
+# library(MLmetrics)
 
 ### Future and DoFuture
 #
 registerDoFuture()
 plan(multisession, workers = detectCores() - 1)
-options(future.globals.maxSize = 10000 * 1024^2)
+options(future.globals.maxSize = 20000 * 1024^2)
 
 
 
@@ -953,8 +954,9 @@ top_10_ranking <- function(df, type){
       axis.text    = element_text(color = "black"),
       legend.position = "none"
     ) +
-    scale_y_discrete(limits = df_tmp$Country)  
+    scale_y_discrete(limits = df_tmp$Country) 
 }
+
 
 
 ### Function `plot_cases_2()`
@@ -1029,7 +1031,8 @@ plot_cases_2 <- function(country_index, type, df, x, model_csim, wave){
     
     df %>%
       filter(Country == by_country[country_index]) %>%
-      ggplot(aes_string(x = "Date", y = type)) +
+      ggplot(aes_string(x = "Date", y = type)
+      ) +
       geom_point( shape = 22          , 
                   size  = 3           , 
                   color = "DarkGreen" , 
@@ -1093,7 +1096,8 @@ plot_cases_2 <- function(country_index, type, df, x, model_csim, wave){
                 size  = 3                  ,
                 color = "grey40"           ,
                 angle = 0
-      )
+      ) + 
+      scale_y_continuous(labels = label_number())
   }
   else if (wave == 1){
     
@@ -1127,7 +1131,8 @@ plot_cases_2 <- function(country_index, type, df, x, model_csim, wave){
                   size  = 3                  ,
                   color = "grey40"           ,
                   angle = 0
-        )
+        ) +
+        scale_y_continuous(labels = label_number())
     }
     else{
     df %>%
@@ -1164,7 +1169,8 @@ plot_cases_2 <- function(country_index, type, df, x, model_csim, wave){
                 size  = 3                  ,
                 color = "grey40"           ,
                 angle = 0
-      )
+      ) + 
+      scale_y_continuous(labels = label_number())
     }
   }
 }
@@ -1296,7 +1302,8 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
                   size = 3                               , 
                   color = "grey40"                       , 
                   angle = 0
-        )   
+        ) +
+        scale_y_continuous(labels = label_number())
     }
     else{
     df %>%
@@ -1358,7 +1365,8 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
                 size = 3                               , 
                 color = "grey40"                       , 
                 angle = 0
-      ) 
+      ) +
+      scale_y_continuous(labels = label_number())
     }
   }
   else if (wave == 1){
@@ -1400,7 +1408,8 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
                   size  = 3                              , 
                   color = "grey40"                       , 
                   angle = 0
-        ) 
+        ) +
+        scale_y_continuous(labels = label_number())
     }
     else{
     df %>%
@@ -1445,7 +1454,8 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
                 size  = 3                              , 
                 color = "grey40"                       , 
                 angle = 0
-                ) 
+      ) +
+      scale_y_continuous(labels = label_number())
     } 
   } 
 } 
@@ -1477,6 +1487,64 @@ visualize_cases_mcmc <- function(country_index, type, df, x, list_output_mcmc, w
 }
 
 
+### Function `screen_top_10()`
+#
+#   Returns screen plots for all possible cases in `mycases` plus population
+#   produced by function `top_10_ranking()` and dataframe `df`
+
+screen_top_10 <- function(df){
+  mycases <- c("Confirmed_Cases", "Fatalities", "Recovered", "Active_Cases")
+  
+  for (i in mycases){
+    print(top_10_ranking(df = df , type = i))
+    print(top_10_ranking(df = df , type = paste0("Daily_",i)))
+    print(top_10_ranking(df = df , type = paste0("Density_",i)))
+  }
+  
+  print(top_10_ranking(df = latest_figures , type = "Population"))
+}
+
+
+### Function `store_top_10()`
+#   
+#   Writes to disk `top_10_ranking()` plots for all cases in `mycases` + `Population`.
+#   * save_path = path to store on disk
+#   * res = resolution in dpi (see ggsave) defaults to "print".
+
+store_top_10 <- function( df, save_path, res= "print" ){
+  mycases <- c("Confirmed_Cases", "Fatalities", "Recovered", "Active_Cases")
+  
+  for (type in mycases){
+    
+    cpath_tmp <- file.path( save_path , paste0( "top10_", type, "_", date_last , ".tiff") )
+    ggsave( file   = cpath_tmp , 
+            plot   = top_10_ranking(df = df , type = type) ,
+            width  = 7.29 , height = 4.51 , unit   = "in" , dpi = res 
+    )
+    
+    cpath_tmp <- file.path( save_path , paste0( "top10_", "Daily_", type, "_", date_last , ".tiff") )
+    ggsave( file  = cpath_tmp ,
+            plot  = top_10_ranking(df = df , type = paste0("Daily_", type)) ,
+            width = 7.29 , height = 4.51 , unit ="in", dpi = res 
+    )
+    
+    cpath_tmp  <- file.path( save_path , paste0( "top10_", "Density_", type, "_", date_last , ".tiff") )
+    ggsave( file  = cpath_tmp , 
+            plot  = top_10_ranking(df = df , type = paste0("Density_",type)) ,
+            width = 7.29, height = 4.51, unit   ="in", dpi = res )
+  }
+  
+  type <- "Population"
+  cpath_tmp <- file.path( save_path , paste0( "top10_", type, "_", date_last , ".tiff") )
+  ggsave( file   = cpath_tmp , 
+          plot   = top_10_ranking(df = df , type = type) ,
+          width  = 7.29 , height = 4.51 , unit   = "in" , dpi = res 
+  )
+}
+
+
+
+
 ### Function `screen_plots()`
 #
 #   Returns plots for all unique combinations of `by_cases` and `by_country`
@@ -1492,6 +1560,7 @@ screen_plots <- function(list_vis){
                    expand.grid( by_cases, by_country, stringsAsFactors = FALSE )$Var1, 
                    expand.grid( by_cases, by_country, stringsAsFactors = FALSE )$Var2))
 }
+
 
 
 ### Function `store_plots()`
