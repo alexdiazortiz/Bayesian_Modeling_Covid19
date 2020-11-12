@@ -139,8 +139,8 @@ for (by_type in by_cases){
                            list_model_string     = list_gompertz_string , 
                            number_chains         = 1                    ,
                            number_steps_update   = 1e4                  , 
-                           number_steps_run_init = 2e3                  , # default values provide reliable results.  
-                           number_steps_run_max  = 1e6                    # increase when longer MCMC runs are needed.
+                           number_steps_run_init = 2e3                  , # Default values provide reasonable results.  
+                           number_steps_run_max  = 1e6                    # Increase when longer MCMC runs are needed.
                            )
   }
 

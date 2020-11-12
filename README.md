@@ -7,7 +7,7 @@ It needs:
 * R (https://www.r-project.org)
 
 It uses:
-* the R Interface to COVID-19 Data Hub  of Guidotti and Ardia to retrive current COVID19 data worldwide. 
+* the R Interface to COVID-19 Data Hub  of Guidotti and Ardia to retrieve current COVID19 data worldwide. 
 
    - See : https://cran.r-project.org/web/packages/COVID19/index.html and "COVID-19 Data Hub," Journal of Open Source Software, 5(51), 2376. doi: 10.21105/joss.02376.
    
