@@ -2,7 +2,7 @@
 title: "Bayesian modeling of COVID19: Double Gompertz equation"
 output: html_notebook
 ---
-# * Version 1.0
+# * Version 1.1
 Uses data from package covid19  (see https://covid19datahub.io) to fit single and double Gompertz equations to model one- and two-wave  COVID1-9 spreading, respectively, by means of a Bayesian MCMC approach.
 
 # Preliminaries
@@ -15,10 +15,15 @@ results_path <- file.path("" , "dir1" , "dir2" , "dir3" )
 ```
 
 # Data from covid19datahub
-* `full_data`             : Loaded with one week (7 days) lag. 
+* `full_data`             : Loaded with one week (2 days) lag. 
 * `sf_dat`                : `full_data`-selected and fortified.
 * `latest_global_figures` : Latest figures worldwide from `sf_dat`.
 * `dat`                   : Working database `sf_dat`-country-filtered by Pop+Dens cutoffs (see below)
+
+Database `latest_global_figures`
+```{r}
+latest_global_figures
+```
 
 Database `dat` has been filtered by following thresholds
 ```{r}
@@ -27,7 +32,7 @@ print(paste("Density of confirmed cases >", density_confirmed_cases_cutoff))
 print(paste("Country's population >"      , population_cutoff))
 ```
 
-A list of the countries included in the working database `dat` can be obtained using `include_countries(sf_dat, "Pop+Dens")` and for those excluded `exclude_countries(sf_dat, "Pop+Dens")`
+A list of the countries included in the working database `dat` can be obtained using `include_countries(sf_dat, "Pop+Dens")` and for those excluded `exclude_countries(sf_dat, "Pop+Dens")`. Also useful to check the spelling and capitalization of countries names.
 
 Latest (per `date_last`) top-10/bottom-10 country-ranking is possible for the following (13) variables
 ```{r}
@@ -37,9 +42,19 @@ names(latest_figures)[-c(1:3,17)]
 
 For instance, `Fatalities`, `Density_Fatalities`, and `Daily_Fatalities`
 ```{r}
-top_10_ranking(df = latest_figures, type = "Fatalities")
+top_10_ranking(df = latest_figures, type = "Recovered")
 top_10_ranking(df = latest_figures, type = "Daily_Fatalities")
-top_10_ranking(df = latest_figures, type = "Density_Fatalities")
+top_10_ranking(df = latest_figures, type = "Density_Confirmed_Cases")
+```
+
+Or all of them via the function `screen_top_10()`
+```{r}
+screen_top_10(df = latest_figures)
+```
+
+Storing the plots using `store_top_10()`
+```{r}
+store_top_10(df =latest_figures , save_path = results_path, res = 180)
 ```
 
 Countries sorted by wave of `Confirmed_Cases`, `Fatalities`, and `Recovered` :
@@ -48,14 +63,17 @@ list_of_countries <- include_countries(dat, "Pop+Dens")
 countries_by_wave <- rank_countries_by_wave(list_of_countries, dat)
 ```
 
+Countries of interest can also be selected individually :
+```{r}
+by_country <- c("France", "Mexico", "Romania")
+```
+
 # MCMC simulation
-MCMC estimation of a Gompertz function for each of the `type` in `by_cases` and countries in `by_country`
+MCMC estimation of a Gompertz function for each of the `type` in `by_cases` and countries in `by_country`. Active cases are not collected directly by the covid19datahub. However, the number of active cases can by estimated as the difference between the confirmed cases and the sum of fatalities and recovered. 
+
 ```{r}
 # Needed to execute the MCMC and visualization
-fit_range    <- 0:projected_days
-
-# List of countries of interest
-by_country <- c("Canada", "Germany")
+fit_range <- 0:projected_days
 
 # Initialize list of types/cases 
 by_cases              <- c("Confirmed_Cases", "Fatalities", "Recovered")
@@ -88,10 +106,13 @@ for (by_type in by_cases){
     by_wave <- get_wave( df      = countries_by_wave , 
                          country = by_country[i]     , 
                          type    = by_type           , 
-                         fswave   = 1
+                         fswave  = 1
                          ) 
-
-  
+    
+    # This how to override the automatic wave classification:
+    if (by_country[i] == "Canada" & by_type == "Fatalities"){by_wave <- 1}
+    if (by_country[i] == "Mexico"){by_wave <- 1}
+    
     list_gompertz_string <- list( type                = by_type             , 
                                       
                                   mean_logasymptote_1 = mean_logasymptote_1 ,
@@ -118,8 +139,8 @@ for (by_type in by_cases){
                            list_model_string     = list_gompertz_string , 
                            number_chains         = 1                    ,
                            number_steps_update   = 1e4                  , 
-                           number_steps_run_init = 2e3                  , 
-                           number_steps_run_max  = 1e6 
+                           number_steps_run_init = 2e3                  , # 2-5e3
+                           number_steps_run_max  = 1e6                    # 1e6
                            )
   }
 
@@ -130,10 +151,7 @@ for (by_type in by_cases){
 names(case_list_output_mcmc) <- by_cases
 remove(country_list_output_mcmc)
 gc()
-```
 
-Active cases can by estimated as a by-product of the previous results.
-```{r}
 gfit_active_cases <- vector(mode = "list", length = length(by_country))
 
 gfit_active_cases <- foreach (i = 1:length(by_country)) %dopar% { 
@@ -166,7 +184,7 @@ remove(gfit_active_cases)
 case_list_output_vis <- vector(mode = "list", length = length(by_cases))
 
 for (by_type in by_cases){
-  country_list_output_vis  <- vector(mode = "list", length = length(by_country))
+  country_list_output_vis <- vector(mode = "list", length = length(by_country))
 
   country_list_output_vis <- foreach (i = 1:length(by_country)) %dopar% {
 
@@ -188,7 +206,7 @@ remove(country_list_output_vis)
 gc()
 ```
 
-Visualizing the results by calling directly each element of the list `case_list_output_vis`:
+Visualizing the results by calling directly each element of the list `case_list_output_vis` (notice that currently you can choose `"Case"`, `"Case_Zoom"`, `"Daily_Case"` and `"Daily_Case_Zoom"`):
 ```{r}
 case_list_output_vis[["Active_Cases"]][[by_country[1]]][["Case"]]
 case_list_output_vis[["Active_Cases"]][[by_country[1]]][["Daily_Case"]]
