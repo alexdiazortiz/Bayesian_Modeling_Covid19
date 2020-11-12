@@ -139,8 +139,8 @@ for (by_type in by_cases){
                            list_model_string     = list_gompertz_string , 
                            number_chains         = 1                    ,
                            number_steps_update   = 1e4                  , 
-                           number_steps_run_init = 2e3                  , # 2-5e3
-                           number_steps_run_max  = 1e6                    # 1e6
+                           number_steps_run_init = 2e3                  , # default values provide reliable results.  
+                           number_steps_run_max  = 1e6                    # increase when longer MCMC runs are needed.
                            )
   }
 
@@ -215,7 +215,7 @@ case_list_output_vis[["Fatalities"]][[by_country[1]]][["Case_Zoom"]]
 By country:
 ```{r}
 invisible( lapply( by_cases, function(type) print(case_list_output_vis[[type]][[by_country[1]]][["Case"]])       ))
-invisible( lapply( by_cases, function(type) print(case_list_output_vis[[type]][[by_country[1]]][["Daily_Case"]]) ))
+invisible( lapply( by_cases, function(type) print(case_list_output_vis[[type]][[by_country[1]]][["Daily_Case_Zoom"]]) ))
 ```
 
 All of them via the function `screen_plots()`
