@@ -152,6 +152,11 @@ names(case_list_output_mcmc) <- by_cases
 remove(country_list_output_mcmc)
 gc()
 
+# Active cases do not follow a Gompertz growth curve. 
+# However, they can be estimated from the mean values 
+# of the regression coefficients of confirmed cases, 
+# fatalities and recovered. 
+
 gfit_active_cases <- vector(mode = "list", length = length(by_country))
 
 gfit_active_cases <- foreach (i = 1:length(by_country)) %dopar% { 
