@@ -7,7 +7,7 @@ Uses data from package covid19  (see https://covid19datahub.io) to fit single an
 
 # Preliminaries
 ```{r}
-# Helper functions and data
+# Functions and data
 source("./covid19_gompertz_utilities.R")
 source("./covid19_gompertz_parameters.R")
 # Path to save results
@@ -15,10 +15,10 @@ results_path <- file.path("" , "dir1" , "dir2" , "dir3" )
 ```
 
 # Data from covid19datahub
-* `full_data`             : Loaded with one week (2 days) lag. 
+* `full_data`             : Loaded with 2 days lag. See "parameters" file.
 * `sf_dat`                : `full_data`-selected and fortified.
 * `latest_global_figures` : Latest figures worldwide from `sf_dat`.
-* `dat`                   : Working database `sf_dat`-country-filtered by Pop+Dens cutoffs (see below)
+* `dat`                   : Working database `sf_dat`-country-filtered by Pop+Dens cutoffs (see below).
 
 Database `latest_global_figures`
 ```{r}
