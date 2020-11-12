@@ -208,8 +208,8 @@ gc()
 
 Visualizing the results by calling directly each element of the list `case_list_output_vis` (notice that currently you can choose `"Case"`, `"Case_Zoom"`, `"Daily_Case"` and `"Daily_Case_Zoom"`):
 ```{r}
-case_list_output_vis[["Active_Cases"]][[by_country[1]]][["Case"]]
-case_list_output_vis[["Active_Cases"]][[by_country[1]]][["Daily_Case"]]
+case_list_output_vis[["Fatalities"]][[by_country[1]]][["Case"]]
+case_list_output_vis[["Fatalities"]][[by_country[1]]][["Case_Zoom"]]
 ```
 
 By country:
