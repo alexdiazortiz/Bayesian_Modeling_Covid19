@@ -25,7 +25,7 @@ Database `latest_global_figures`
 latest_global_figures
 ```
 
-Database `dat` has been filtered by following thresholds
+Database `dat` has been filtered by the following thresholds:
 ```{r}
 print(paste("Confirmed cases >"           , confirmed_cases_cutoff))
 print(paste("Density of confirmed cases >", density_confirmed_cases_cutoff))
@@ -69,7 +69,7 @@ by_country <- c("France", "Mexico", "Romania")
 ```
 
 # MCMC simulation
-MCMC estimation of a Gompertz function for each of the `type` in `by_cases` and countries in `by_country`. Active cases are not collected directly by the covid19datahub. However, the number of active cases can by estimated as the difference between the confirmed cases and the sum of fatalities and recovered. 
+MCMC estimation of a Gompertz function for each of the `type` in `by_cases` and countries in `by_country`. Active cases are not collected directly by the `covid19datahub`. However, the number of active cases can by estimated as the difference between the confirmed cases and the sum of fatalities and recovered. 
 
 ```{r}
 # Needed to execute the MCMC and visualization
