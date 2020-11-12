@@ -7,10 +7,8 @@
 ### Date
 #
 date_last      <- Sys.Date() - 2         # Data is loaded with one week (7 days) lag
-day_zero       <- as.Date("2020-01-01")  # Date corresponding to day / time = 0
-# Legacy
-# date_cutoff    <- date_last  - 1         # Separates training and test sets (7 days to have a week of testing)
-# date_pred      <- Sys.Date() - 2         # Date to predict 
+date_first     <- as.Date("2020-01-01")  # Date corresponding to day / time = 0
+day_zero       <- date_first             # Date corresponding to day / time = 0
 
 ### Data cutoffs
 #
@@ -18,14 +16,6 @@ confirmed_cases_cutoff         <- 1000   # Filters out countries with less confi
 fatalities_cutoff              <- 25     # Filters out countries with less fatalities than
 density_confirmed_cases_cutoff <- 0.001  # Filters out countries with less density of confirmed cases than
 population_cutoff              <- 1e6    # Filters out countries with less population than
-
-### Plotting 
-#   Legacy
-#   
-# plot_flag      <- 0        # 0 : no output. This flag also rules the writting of summaries.
-# plot_size      <- 500      # in px
-# plot_font_size <- 22       # in px
-# plot_quality   <- 75       # jpeg
 
 ### Projections and credible intervals
 # 
@@ -60,7 +50,7 @@ full_data <- covid19(verbose = FALSE, raw = FALSE, level = 1, start = day_zero, 
 #   Select columns of interest, rename them, and calculate the number of days elapsed from 
 #   day_zero = Date[1].
 #   Replaces NAs from the lag by zero which is their consistent value.
-#
+#   Replaces negative daily values by zero as there are no real negative daily values.
 
 sf_dat <-full_data %>% 
   select(id                                    , 
@@ -81,7 +71,14 @@ sf_dat <-full_data %>%
          Daily_Recovered         = Recovered    - lag(Recovered)            , 
          Daily_Active_Cases      = Active_Cases - lag(Active_Cases)         ,
          Time                    = as.numeric(Date - Date[1])) %>% 
-  replace_na(list(Daily_Confirmed_Cases = 0, Daily_Fatalities = 0, Daily_Recovered = 0, Daily_Active_Cases = 0)) %>%
+  replace_na(list(Daily_Confirmed_Cases = 0 , 
+                  Daily_Fatalities      = 0 , 
+                  Daily_Recovered       = 0 , 
+                  Daily_Active_Cases    = 0 )) %>%
+  mutate(Daily_Confirmed_Cases = (Daily_Confirmed_Cases + abs(Daily_Confirmed_Cases))/2 ,
+         Daily_Fatalities      = (Daily_Fatalities      + abs(Daily_Fatalities))/2      ,
+         Daily_Recovered       = (Daily_Recovered       + abs(Daily_Recovered)) /2      ,
+         Daily_Active_Cases    = (Daily_Active_Cases    + abs(Daily_Active_Cases))/2 ) %>%
   ungroup() 
 
 

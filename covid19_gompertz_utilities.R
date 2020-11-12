@@ -19,6 +19,7 @@ library(ggplot2)
 library(ggthemes)
 library(extrafont)
 library(scales)
+library(lubridate)
 
 library(future)
 library(iterators)
@@ -27,8 +28,6 @@ library(rngtools)
 library(doRNG)
 library(foreach)
 library(doFuture)
-
-# library(MLmetrics)
 
 ### Future and DoFuture
 #
@@ -730,35 +729,6 @@ run_mcmc_simulation_2 <- function(index_country                          ,
 #                                                                                               #
 #################################################################################################
 
-growth_rate <- function(csim_data_gompertz){
-  colMeans(csim_data_gompertz)[[1]] 
-}
-
-location <- function(csim_data_gompertz){
-  colMeans(csim_data_gompertz)[[2]] 
-}
-
-asymptote <- function(csim_data_gompertz){
-  exp( colMeans(csim_data_gompertz)[[3]] )
-}
-
-inflection_point <- function(csim_data_gompertz){
-  log( location(csim_data_gompertz) ) / growth_rate(csim_data_gompertz)
-}
-
-peak_daily_rate <- function(csim_data_gompertz){
-  as.character( as.Date(day_zero) + round(inflection_point(csim_data_gompertz), 0) ) 
-}
-
-days_first_fatality <- function(csim_data_gompertz, date_1st_fatality){
-  round(inflection_point(csim_data_gompertz), 0) - date_1st_fatality 
-}
-
-days_first_confirmed_case <- function(csim_data_gompertz, date_1st_confirmed_case){
-  round(inflection_point(csim_data_gompertz), 0) - date_1st_confirmed_case 
-}
-
-
 ### Function `gompertz_eval()` 
 #
 #   Evaluates the Gompertz function from the average posterior values collected in `model_csim`, for a natural time range 
@@ -943,9 +913,10 @@ top_10_ranking <- function(df, type){
     ggplot(aes_string(x = paste0(type,"/", my_factor), y = "Country", color = "Rank" )) + 
     geom_point(size = 4) +
     geom_segment(aes(xend = 0, yend = Country), size = 2) +
+    scale_color_manual(values=c("#E41A1C", "#377EB8")) + # Set1 
     scale_x_continuous("", position = "top") + # limits = c(0, 7), expand = c(0,0.1)
-    labs(title = paste("Highest and lowest number of", my_text), 
-         caption = "Source: A. Díaz Ortiz, Data from COVID-19 Data Hub") +
+    labs(title   = paste("Highest and lowest number of", my_text), 
+         caption = paste("Source: A. Diaz Ortiz, Data from COVID-19 Data Hub as of",as.character(date_last))) +
     theme_tufte(base_family = "sans") +
     theme( 
       axis.line.y  = element_blank() ,
@@ -956,7 +927,6 @@ top_10_ranking <- function(df, type){
     ) +
     scale_y_discrete(limits = df_tmp$Country) 
 }
-
 
 
 ### Function `plot_cases_2()`
@@ -972,7 +942,14 @@ top_10_ranking <- function(df, type){
 
 plot_cases_2 <- function(country_index, type, df, x, model_csim, wave){
   
-  max_date  <- max(as.Date(x, origin = day_zero)) 
+  min_date   <- min(as.Date(x, origin = day_zero)) 
+  max_date   <- max(as.Date(x, origin = day_zero)) 
+  date_x_lim <- as.character(c(min_date, max_date + 150))
+  
+  country_pop <- df %>%
+    filter(Country == by_country[country_index]) %>%
+    select(Population) %>%
+    slice_tail(n = 1) 
   
   ylabel    <- type %>% 
     str_replace_all(.,  "_", " ") %>%
@@ -983,32 +960,31 @@ plot_cases_2 <- function(country_index, type, df, x, model_csim, wave){
   
   if (type == "Active_Cases"){ 
     
-    gfit           <- model_csim
+    gfit  <- model_csim
     if (gfit[length(gfit)] < 0){
       label_max_gfit <-  "lim. 0+"
     }
     else{
-    label_max_gfit <- as.character( prettyNum(round(gfit[length(gfit)], 0), big.mark =" ") )
+    label_max_gfit <- as.character( prettyNum(round(gfit[length(gfit)], 0), big.mark = " ") )
     }
     
     inflexion_pts <- get_inflection_points(gfit)
     inflexion_pts <- as.Date(round(inflexion_pts, 0), origin = day_zero)
     
-    data_help <- bind_cols( Time     = x                             , 
-                            Date     = as.Date(x, origin = day_zero) , 
+    data_help <- bind_cols( Time = x                             , 
+                            Date = as.Date(x, origin = day_zero) , 
                             type = gfit                      
                             )
     names(data_help) <- c("Time", "Date",  type)
   }
   else{  
-    
     gfit    <- gompertz_eval(model_csim, x, wave = wave)
     gfit_c1 <- gompertz_eval(model_csim, x, wave = 1)
     gfit_c2 <- gfit - gfit_c1
     
-    label_max_gfit    <- as.character( prettyNum(round(gfit[length(gfit)],       0), big.mark =" ") )
-    label_max_gfit_c1 <- as.character( prettyNum(round(gfit_c1[length(gfit_c1)], 0), big.mark =" ") )
-    label_max_gfit_c2 <- as.character( prettyNum(round(gfit_c2[length(gfit_c2)], 0), big.mark =" ") )
+    label_max_gfit    <- as.character( prettyNum(round(gfit[length(gfit)],       0), big.mark = " ") )
+    label_max_gfit_c1 <- as.character( prettyNum(round(gfit_c1[length(gfit_c1)], 0), big.mark = " ") )
+    label_max_gfit_c2 <- as.character( prettyNum(round(gfit_c2[length(gfit_c2)], 0), big.mark = " ") )
     
     inflexion_pts <- get_inflection_points(gfit)
     inflexion_pts <- as.Date(round(inflexion_pts, 0), origin = day_zero)
@@ -1035,44 +1011,44 @@ plot_cases_2 <- function(country_index, type, df, x, model_csim, wave){
       ) +
       geom_point( shape = 22          , 
                   size  = 3           , 
-                  color = "DarkGreen" , 
-                  fill  = "DarkGreen" ,  
+                  color = "#440154FF" , 
+                  fill  = "#440154FF" ,  
                   alpha = 0.35
       ) +
       geom_line( data     = data_help , 
                  linetype = "solid"   , 
-                 color    = "DarkRed" , 
+                 color    = "#E41A1C" , 
                  size     = 0.75
       ) +
       geom_ribbon( data  = data_help                                 , 
                    aes(x = Date, ymin =  Lower_ci, ymax =  Upper_ci) , 
-                   fill  = "red"                                     , 
+                   fill  = "#E41A1C"                                     , 
                    alpha = 0.2
       ) +
       geom_line( data     = data_help           , 
                  aes(x = Date, y = Component_1) ,
                  linetype = "solid"             , 
-                 color    = "blue"              , 
+                 color    = "#377EB8"           , 
                  size     = 0.75                ,
-                 alpha    = 0.35
-      ) +
+                 alpha    = 0.70
+      ) +  
       geom_line( data     = data_help           , 
                  aes(x = Date, y = Component_2) ,
                  linetype = "solid"             , 
-                 color    = "blue"              , 
+                 color    = "#377EB8"           , 
                  size     = 0.75                ,
-                 alpha    = 0.35
+                 alpha    = 0.70
       ) +
       labs( title   = by_country[country_index] ,  
             y       = ylabel                    , 
-            caption = "Source: A. Díaz Ortiz, Data from COVID-19 Data Hub"
+            caption = paste("Source: A. Diaz Ortiz, Data from COVID-19 Data Hub as of",as.character(date_last))
       ) +
       theme_tufte( base_family = "sans" , 
                    base_size   = 13
       )  +
       annotate( "text"                           ,
                 label = label_max_gfit_c1        ,
-                x     = max_date + 45            ,
+                x     = max_date + 60            ,
                 y     = gfit_c1[length(gfit_c1)] ,
                 vjust = "top"                    ,
                 size  = 3                        ,
@@ -1081,7 +1057,7 @@ plot_cases_2 <- function(country_index, type, df, x, model_csim, wave){
       )  +
       annotate( "text"                           ,
                 label = label_max_gfit_c2        ,
-                x     = max_date + 45            ,
+                x     = max_date + 60            ,
                 y     = gfit_c2[length(gfit_c2)] ,
                 vjust = "top"                    ,
                 size  = 3                        ,
@@ -1090,14 +1066,14 @@ plot_cases_2 <- function(country_index, type, df, x, model_csim, wave){
       ) +
       annotate( "text"                     ,
                 label = label_max_gfit     ,
-                x     = max_date + 45      ,
+                x     = max_date + 60      ,
                 y     = gfit[length(gfit)] ,
                 vjust = "bottom"           ,
                 size  = 3                  ,
                 color = "grey40"           ,
                 angle = 0
       ) + 
-      scale_y_continuous(labels = label_number())
+      scale_y_continuous(labels = label_number()) 
   }
   else if (wave == 1){
     
@@ -1107,25 +1083,25 @@ plot_cases_2 <- function(country_index, type, df, x, model_csim, wave){
         ggplot(aes_string(x = "Date", y = type)) +
         geom_point( shape = 22          , 
                     size  = 3           , 
-                    color = "DarkGreen" , 
-                    fill  = "DarkGreen" ,  
+                    color = "#440154FF" , 
+                    fill  = "#440154FF" ,  
                     alpha = 0.35
         ) +
         geom_line( data     = data_help , 
                    linetype = "solid"   , 
-                   color    = "DarkRed" , 
+                   color    = "#E41A1C" , 
                    size     = 0.75
         ) +
         labs( title   = by_country[country_index] ,  
               y       = ylabel                    , 
-              caption = "Source: A. Díaz Ortiz, Data from COVID-19 Data Hub"
+              caption = paste("Source: A. Diaz Ortiz, Data from COVID-19 Data Hub as of",as.character(date_last))
         ) +
         theme_tufte( base_family = "sans" , 
                      base_size   = 13
         )  +
         annotate( "text"                     ,
                   label = label_max_gfit     ,
-                  x     = max_date + 45      ,
+                  x     = max_date + 60      ,
                   y     = gfit[length(gfit)] ,
                   vjust = "bottom"           ,
                   size  = 3                  ,
@@ -1140,30 +1116,30 @@ plot_cases_2 <- function(country_index, type, df, x, model_csim, wave){
       ggplot(aes_string(x = "Date", y = type)) +
       geom_point( shape = 22          , 
                   size  = 3           , 
-                  color = "DarkGreen" , 
-                  fill  = "DarkGreen" ,  
+                  color = "#440154FF" , 
+                  fill  = "#440154FF" ,  
                   alpha = 0.35
       ) +
       geom_line( data     = data_help , 
                  linetype = "solid"   , 
-                 color    = "DarkRed" , 
+                 color    = "#E41A1C" , 
                  size     = 0.75
       ) +
       geom_ribbon( data  = data_help                                 , 
                    aes(x = Date, ymin =  Lower_ci, ymax =  Upper_ci) , 
-                   fill  = "red"                                     , 
+                   fill  = "#E41A1C"                                     , 
                    alpha = 0.2
       ) +
       labs( title   = by_country[country_index] ,  
             y       = ylabel                    , 
-            caption = "Source: A. Díaz Ortiz, Data from COVID-19 Data Hub"
+            caption = paste("Source: A. Diaz Ortiz, Data from COVID-19 Data Hub as of",as.character(date_last))
       ) +
       theme_tufte( base_family = "sans" , 
                    base_size   = 13
       )  +
       annotate( "text"                     ,
                 label = label_max_gfit     ,
-                x     = max_date + 45      ,
+                x     = max_date + 60      ,
                 y     = gfit[length(gfit)] ,
                 vjust = "bottom"           ,
                 size  = 3                  ,
@@ -1189,6 +1165,10 @@ plot_cases_2 <- function(country_index, type, df, x, model_csim, wave){
 
 plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
   
+  min_date   <- min(as.Date(x, origin = day_zero)) 
+  max_date   <- max(as.Date(x, origin = day_zero)) 
+  date_x_lim <- as.character(c(min_date, max_date + 150))
+  
   dcases <- df %>%
     filter(Country == by_country[country_index]) %>%
     slice_max(n = 1, order_by = !! rlang::sym(c(type))) %>%
@@ -1212,7 +1192,7 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
     inflexion_pts <- as.Date(round(inflexion_pts, 0), origin = day_zero)
     if (length(inflexion_pts) > 1){wave <- 2}
     
-    y_pos      <- max(max_dgfit, max_dcases)
+    y_pos     <- max(max_dgfit, max_dcases)
     
     data_help <- bind_cols( Time     = x[-1]                               , 
                             Date     = as.Date(x[-1], origin = day_zero)   , 
@@ -1245,7 +1225,6 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
   
   }
 
-  
   if (wave == 2){
     if ( type == "Daily_Active_Cases" ){
       df %>%
@@ -1253,18 +1232,18 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
         ggplot(aes_string(x = "Date", y = type)) +
         geom_point( shape = 22          , 
                     size  = 3           , 
-                    color = "DarkGreen" , 
-                    fill  = "DarkGreen" ,  
+                    color = "#440154FF" , 
+                    fill  = "#440154FF" ,  
                     alpha = 0.35
         ) +
         geom_line( data     = data_help , 
                    linetype = "solid"   , 
-                   color    = "DarkRed" , 
+                   color    = "#E41A1C" , 
                    size     = 0.75
         ) +
         labs( title   = by_country[country_index] ,  
               y       = ylabel                    , 
-              caption = "Source: A. Díaz Ortiz, Data from COVID-19 Data Hub"
+              caption = paste("Source: A. Diaz Ortiz, Data from COVID-19 Data Hub as of",as.character(date_last))
         ) +
         theme_tufte( base_family = "sans" , 
                      base_size   = 13
@@ -1277,8 +1256,8 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
         color    = "grey40" , 
         linetype = "dotted"
         ) +
-        geom_segment(aes(x    = inflexion_pts[2] , 
-                         xend = inflexion_pts[2] ,
+        geom_segment(aes(x    = inflexion_pts[length(inflexion_pts)] , 
+                         xend = inflexion_pts[length(inflexion_pts)] ,
                          y    = 1.15 * y_pos     , 
                          yend = 1.05 * y_pos
         ),
@@ -1292,14 +1271,14 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
                   vjust = "bottom"                       , 
                   size  = 3                              , 
                   color = "grey40"                       , 
-                  angle  = 0
+                  angle = 0
         ) +
         annotate( "text"                                 , 
-                  label = as.character(inflexion_pts[2]) ,
-                  x     = inflexion_pts[2]               , 
+                  label = as.character(inflexion_pts[length(inflexion_pts)]) ,
+                  x     = inflexion_pts[length(inflexion_pts)]               , 
                   y     = 1.2 * y_pos                    ,
                   vjust = "bottom"                       ,  
-                  size = 3                               , 
+                  size  = 3                              , 
                   color = "grey40"                       , 
                   angle = 0
         ) +
@@ -1311,23 +1290,23 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
       ggplot(aes_string(x = "Date", y = type)) +
       geom_point( shape = 22          , 
                   size  = 3           , 
-                  color = "DarkGreen" , 
-                  fill  = "DarkGreen" ,  
+                  color = "#440154FF" , 
+                  fill  = "#440154FF" ,  
                   alpha = 0.35
       ) +
       geom_line( data     = data_help , 
                  linetype = "solid"   , 
-                 color    = "DarkRed" , 
+                 color    = "#E41A1C" , 
                  size     = 0.75
       ) +
       geom_ribbon( data  = data_help                                 , 
                    aes(x = Date, ymin =  Lower_ci, ymax =  Upper_ci) , 
-                   fill  = "red"                                     , 
+                   fill  = "#E41A1C"                                     , 
                    alpha = 0.2
       ) +
       labs( title   = by_country[country_index] ,  
             y       = ylabel                    , 
-            caption = "Source: A. Díaz Ortiz, Data from COVID-19 Data Hub"
+            caption = paste("Source: A. Diaz Ortiz, Data from COVID-19 Data Hub as of",as.character(date_last))
       ) +
       theme_tufte( base_family = "sans" , 
                    base_size   = 13
@@ -1340,8 +1319,8 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
                    color    = "grey40" , 
                    linetype = "dotted"
       ) +
-      geom_segment(aes(x    = inflexion_pts[2] , 
-                       xend = inflexion_pts[2] ,
+      geom_segment(aes(x    = inflexion_pts[length(inflexion_pts)] , 
+                       xend = inflexion_pts[length(inflexion_pts)] ,
                        y    = 1.15 * y_pos     , 
                        yend = 1.05 * y_pos
                        ),
@@ -1358,8 +1337,8 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
                 angle  = 0
       ) +
       annotate( "text"                                 , 
-                label = as.character(inflexion_pts[2]) ,
-                x     = inflexion_pts[2]               , 
+                label = as.character(inflexion_pts[length(inflexion_pts)]) ,
+                x     = inflexion_pts[length(inflexion_pts)]               , 
                 y     = 1.2 * y_pos                    ,
                 vjust = "bottom"                       ,  
                 size = 3                               , 
@@ -1376,18 +1355,18 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
         ggplot(aes_string(x = "Date", y = type)) +
         geom_point( shape = 22          , 
                     size  = 3           , 
-                    color = "DarkGreen" , 
-                    fill  = "DarkGreen" ,  
+                    color = "#440154FF" , 
+                    fill  = "#440154FF" ,  
                     alpha = 0.35
         ) +
         geom_line( data     = data_help , 
                    linetype = "solid"   , 
-                   color    = "DarkRed" , 
+                   color    = "#E41A1C" , 
                    size     = 0.75
         ) +
         labs( title   = by_country[country_index] ,  
               y       = ylabel                    , 
-              caption = "Source: A. Díaz Ortiz, Data from COVID-19 Data Hub"
+              caption = paste("Source: A. Diaz Ortiz, Data from COVID-19 Data Hub as of",as.character(date_last))
         ) +
         theme_tufte( base_family = "sans" , 
                      base_size   = 13
@@ -1417,23 +1396,23 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
       ggplot(aes_string(x = "Date", y = type)) +
       geom_point( shape = 22          , 
                   size  = 3           , 
-                  color = "DarkGreen" , 
-                  fill  = "DarkGreen" ,  
+                  color = "#440154FF" , 
+                  fill  = "#440154FF" ,  
                   alpha = 0.35
       ) +
       geom_line( data     = data_help , 
                  linetype = "solid"   , 
-                 color    = "DarkRed" , 
+                 color    = "#E41A1C" , 
                  size     = 0.75
       ) +
       geom_ribbon( data  = data_help                                 , 
                    aes(x = Date, ymin =  Lower_ci, ymax =  Upper_ci) , 
-                   fill  = "red"                                     , 
+                   fill  = "#E41A1C"                                     , 
                    alpha = 0.2
       ) +
       labs( title   = by_country[country_index] ,  
             y       = ylabel                    , 
-            caption = "Source: A. Díaz Ortiz, Data from COVID-19 Data Hub"
+            caption = paste("Source: A. Diaz Ortiz, Data from COVID-19 Data Hub as of",as.character(date_last))
       ) +
       theme_tufte( base_family = "sans" , 
                    base_size   = 13
@@ -1463,7 +1442,7 @@ plot_daily_cases_2 <- function(country_index, type, df, x, model_csim, wave){
 
 ### Function `visualize_cases_mcmc()`
 #
-#   Outputs a list of plots from the MCMC data
+#   Outputs a list of plots from the MCMC data 
 #    
 #   Input variables are :
 #     * country_index    = index of by_country vector
@@ -1479,10 +1458,43 @@ visualize_cases_mcmc <- function(country_index, type, df, x, list_output_mcmc, w
   model_csim <- list_output_mcmc[["csim"]]
   wave       <- list_output_mcmc[["wave"]]
   
-  pc  <- plot_cases_2(country_index, type, df, x, model_csim, wave)
-  pdc <- plot_daily_cases_2(country_index, dtype, df, x, model_csim, wave)
+  min_date   <- min(as.Date(x, origin = day_zero)) 
+  max_date   <- max(as.Date(x, origin = day_zero)) 
+  date_x_lim <- as.character(c(min_date, max_date + 150))
   
-  return_list<-list(Case = pc, Daily_Case = pdc)
+  case_y_lim <- df %>%
+    filter(Country == by_country[country_index]) %>%
+    select(!! rlang::sym(c(type))) %>%
+    range() 
+  
+  dcase_y_lim <- df %>%
+    filter(Country == by_country[country_index]) %>%
+    select(!! rlang::sym(c(dtype))) %>%
+    unname() %>%
+    unlist() %>%
+    quantile(probs = c(0, 0.99))
+  
+  case_x_lim <- df %>%
+    select(Time) %>%
+    range() %>%
+    lubridate::as_date(origin = day_zero)
+  
+  pc  <- plot_cases_2(country_index, type, df, x, model_csim, wave)          + 
+            scale_x_date(labels = date_format("%Y-%m"))                      +
+            coord_cartesian(xlim = lubridate::as_date(date_x_lim))
+  pdc <- plot_daily_cases_2(country_index, dtype, df, x, model_csim, wave)   + 
+            scale_x_date(labels = date_format("%Y-%m"))                      +
+            coord_cartesian(xlim = lubridate::as_date(date_x_lim))
+  
+  pcz  <- plot_cases_2(country_index, type, df, x, model_csim, wave)         + 
+            scale_x_date(labels = date_format("%Y-%m"))                      +
+            coord_cartesian(xlim = case_x_lim, ylim =  case_y_lim )
+  
+  pdcz <- plot_daily_cases_2(country_index, dtype, df, x, model_csim, wave)  + 
+            scale_x_date(labels = date_format("%Y-%m"))                      +
+            coord_cartesian(xlim = case_x_lim, ylim = dcase_y_lim )
+  
+  return_list<-list(Case = pc, Daily_Case = pdc, Case_Zoom = pcz, Daily_Case_Zoom = pdcz )
   return(return_list)
 }
 
@@ -1543,8 +1555,6 @@ store_top_10 <- function( df, save_path, res= "print" ){
 }
 
 
-
-
 ### Function `screen_plots()`
 #
 #   Returns plots for all unique combinations of `by_cases` and `by_country`
@@ -1552,15 +1562,22 @@ store_top_10 <- function( df, save_path, res= "print" ){
 
 screen_plots <- function(list_vis){
   
-  invisible(mapply(function(type, country) print(list_vis[[type]][[country]][["Case"]] ) , 
+  invisible(mapply(function(type, country) print(list_vis[[type]][[country]][["Case"]] ), 
                    expand.grid( by_cases, by_country, stringsAsFactors = FALSE )$Var1, 
                    expand.grid( by_cases, by_country, stringsAsFactors = FALSE )$Var2))
   
   invisible(mapply(function(type, country) print(list_vis[[type]][[country]][["Daily_Case"]] ) , 
                    expand.grid( by_cases, by_country, stringsAsFactors = FALSE )$Var1, 
                    expand.grid( by_cases, by_country, stringsAsFactors = FALSE )$Var2))
+  
+  invisible(mapply(function(type, country) print(list_vis[[type]][[country]][["Case_Zoom"]] ) , 
+                   expand.grid( by_cases, by_country, stringsAsFactors = FALSE )$Var1, 
+                   expand.grid( by_cases, by_country, stringsAsFactors = FALSE )$Var2))
+  
+  invisible(mapply(function(type, country) print(list_vis[[type]][[country]][["Daily_Case_Zoom"]] ) , 
+                   expand.grid( by_cases, by_country, stringsAsFactors = FALSE )$Var1, 
+                   expand.grid( by_cases, by_country, stringsAsFactors = FALSE )$Var2))
 }
-
 
 
 ### Function `store_plots()`
@@ -1597,6 +1614,30 @@ store_plots <- function(list_vis, save_path, res = "print"){
               unit   ="in"      , 
               dpi    = res
       )
+      
+      czpath_tmp  <- file.path( save_path , 
+                                paste0( country , "_" , type , "_Zoom_" , date_last , ".tiff") 
+      )
+      
+      ggsave( list_vis[[type]][[country]][["Case_Zoom"]] , 
+              file   = czpath_tmp, 
+              width  = 7.29     , 
+              height = 4.51     , 
+              unit   ="in"      , 
+              dpi    = res
+      )
+      
+      dzpath_tmp  <- file.path( save_path , 
+                                paste0( country , "_Daily_" , type , "_Zoom_", date_last , ".tiff") 
+      )
+      
+      ggsave( list_vis[[type]][[country]][["Daily_Case_Zoom"]] , 
+              file   = dzpath_tmp , 
+              width  = 7.29      , 
+              height = 4.51      , 
+              unit   = "in"      , 
+              dpi    = res
+      )  
       
     }
   }
