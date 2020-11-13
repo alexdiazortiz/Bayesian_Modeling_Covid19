@@ -5,32 +5,22 @@
 #################################################################################################
 
 remotes::install_github("covid19datahub/R")
+packages_needed <- c("globals" ,  "COVID19"  , "dplyr"   , "tidyr"    , "stringr", "rjags"    , 
+                     "quantmod",  "ggplot2"  , "ggthemes", "extrafont", "scales" , "lubridate", 
+                     "future"  ,  "iterators", "parallel", "rngtools" , "doRNG"  , "foreach"  ,
+                     "doFuture" )
 
-library(globals)
-library(COVID19)
-library(dplyr)
-library(tidyr)
-library(stringr)
+packages_to_be_installed <- packages_needed[!(packages_needed %in% installed.packages()[,"Package"])]
+if(length(packages_to_be_installed)) install.packages(packages_to_be_installed) 
+invisible(lapply(packages_needed, require, character.only = TRUE))
 
-library(rjags)
-library(quantmod)
 
-library(ggplot2)
-library(ggthemes)
-library(extrafont)
-library(scales)
-library(lubridate)
+#################################################################################################
+#                                                                                               #
+#  Future and DoFuture                                                                          #
+#                                                                                               #
+#################################################################################################
 
-library(future)
-library(iterators)
-library(parallel)
-library(rngtools)
-library(doRNG)
-library(foreach)
-library(doFuture)
-
-### Future and DoFuture
-#
 registerDoFuture()
 plan(multisession, workers = detectCores() - 1)
 options(future.globals.maxSize = 20000 * 1024^2)
